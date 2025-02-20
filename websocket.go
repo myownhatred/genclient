@@ -1,21 +1,33 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
-	"strings"
+	"mime/multipart"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+type Model struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
 type WebSocketClient struct {
 	config *Config
 	client *Client
 	logger *slog.Logger
+	token  string
+	models []Model
+}
+
+type WebSocketMessage struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 func NewWebSocketClient(config *Config, client *Client, logger *slog.Logger) *WebSocketClient {
@@ -46,16 +58,16 @@ func (w *WebSocketClient) connect() error {
 	url := fmt.Sprintf("wss://%s:%s/ws", w.config.Server.Host, w.config.Server.Port)
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("dial error: %w", err)
 	}
 	defer conn.Close()
 
 	if err := w.authenticate(conn); err != nil {
-		return err
+		return fmt.Errorf("authentication error: %w", err)
 	}
 
-	if err := w.sendModels(conn); err != nil {
-		return err
+	if err := w.requestModels(conn); err != nil {
+		return fmt.Errorf("models request error: %w", err)
 	}
 
 	go w.startPingLoop(conn)
@@ -63,8 +75,47 @@ func (w *WebSocketClient) connect() error {
 }
 
 func (w *WebSocketClient) authenticate(conn *websocket.Conn) error {
-	authJSON := fmt.Sprintf(`{"password":"%s"}`, w.config.Server.Passcode)
-	return conn.WriteMessage(websocket.TextMessage, []byte(authJSON))
+	authReq := WebSocketMessage{
+		Type:    "auth",
+		Payload: json.RawMessage(fmt.Sprintf(`{"password":"%s"}`, w.config.Server.Passcode)),
+	}
+
+	if err := w.writeJSON(conn, authReq); err != nil {
+		return err
+	}
+
+	var response WebSocketMessage
+	if err := conn.ReadJSON(&response); err != nil {
+		return err
+	}
+
+	if response.Type != "auth_success" {
+		return fmt.Errorf("auth failed")
+	}
+
+	var authResponse struct {
+		Token string `josn:"token"`
+	}
+	if err := json.Unmarshal(response.Payload, &authResponse); err != nil {
+		return err
+	}
+	w.token = authResponse.Token
+
+	return nil
+
+}
+
+func (w *WebSocketClient) writeJSON(conn *websocket.Conn, v interface{}) error {
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	defer conn.SetWriteDeadline(time.Time{})
+	return conn.WriteJSON(v)
+}
+
+func (w *WebSocketClient) requestModels(conn *websocket.Conn) error {
+	req := WebSocketMessage{
+		Type: "get_models",
+	}
+	return w.writeJSON(conn, req)
 }
 
 func (w *WebSocketClient) sendModels(conn *websocket.Conn) error {
@@ -97,34 +148,119 @@ func (w *WebSocketClient) startPingLoop(conn *websocket.Conn) {
 
 func (w *WebSocketClient) handleMessages(conn *websocket.Conn) error {
 	for {
-		_, message, err := conn.ReadMessage()
+		var message WebSocketMessage
+		err := conn.ReadJSON(&message)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err) {
-				return fmt.Errorf("connection closed: %v", err)
+				return fmt.Errorf("connection closed: %w", err)
 			}
 			return err
 		}
 
-		parts := strings.Split(string(message), "^")
-		if len(parts) != 2 {
-			w.logger.Error("Invalid message format")
-			continue
-		}
+		switch message.Type {
+		case "task":
+			var task Tasukete
+			if err := json.Unmarshal(message.Payload, &task); err != nil {
+				w.logger.Error("Failed to unmarshal task", "error", err)
+				continue
+			}
+			w.handleTask(conn, &task)
 
-		modelID, err := strconv.Atoi(parts[0])
-		if err != nil {
-			w.logger.Error("Invalid model ID", "error", err)
-			continue
-		}
+		case "models_update":
+			var models []Model
+			if err := json.Unmarshal(message.Payload, &models); err != nil {
+				w.logger.Error("Failed to unmarshal models", "error", err)
+				continue
+			}
+			w.models = models
+			w.logger.Info("Models updated", "count", len(models))
 
-		if modelID < 1 || modelID > len(w.config.Models) {
-			w.logger.Error("Model ID out of range")
-			continue
-		}
-
-		prompt := parts[1]
-		if err := w.client.GenerateImage(prompt, modelID); err != nil {
-			w.logger.Error("Failed to generate image", "error", err)
+		default:
+			w.logger.Warn("Unknown message type", "type", message.Type)
 		}
 	}
+}
+
+func (w *WebSocketClient) handleTask(conn *websocket.Conn, task *Tasukete) {
+	// Validate task
+	if err := task.Validate(); err != nil {
+		w.logger.Error("Invalid task received", "error", err)
+		return
+	}
+
+	// Process task based on type
+	switch task.Type {
+	case TTI:
+		w.handleTTITask(conn, task)
+		// case LLM:
+		// 	w.handleLLMTask(conn, task)
+		// case Recon:
+		// 	w.handleReconTask(conn, task)
+	}
+}
+
+func (w *WebSocketClient) handleTTITask(conn *websocket.Conn, task *Tasukete) {
+	// Update task status
+	task.Status = StatusProcessing
+	w.sendTaskUpdate(conn, task)
+
+	// Generate image
+	result, err := w.client.GenerateImage(task.Prompt, task.Model)
+	if err != nil {
+		task.Status = StatusFailed
+		w.sendTaskUpdate(conn, task)
+		return
+	}
+
+	// Send result
+	if err := w.sendTaskResult(conn, task, result); err != nil {
+		w.logger.Error("Failed to send task result", "error", err)
+	}
+}
+
+func (w *WebSocketClient) sendTaskUpdate(conn *websocket.Conn, task *Tasukete) {
+	msg := WebSocketMessage{
+		Type:    "task_update",
+		Payload: must(json.Marshal(task)),
+	}
+	if err := w.writeJSON(conn, msg); err != nil {
+		w.logger.Error("Failed to send task update", "error", err)
+	}
+}
+
+func (w *WebSocketClient) sendTaskResult(conn *websocket.Conn, task *Tasukete, result []byte) error {
+	// Create multipart message
+	var b bytes.Buffer
+	writer := multipart.NewWriter(&b)
+
+	// Add task metadata
+	metadataField, err := writer.CreateFormField("task")
+	if err != nil {
+		return err
+	}
+	if err := json.NewEncoder(metadataField).Encode(task); err != nil {
+		return err
+	}
+
+	// Add file
+	fileField, err := writer.CreateFormFile("file", fmt.Sprintf("%s.png", task.UUID))
+	if err != nil {
+		return err
+	}
+	if _, err := fileField.Write(result); err != nil {
+		return err
+	}
+
+	writer.Close()
+
+	// Send as binary websocket message
+	return conn.WriteMessage(websocket.BinaryMessage, b.Bytes())
+}
+
+// Helper function for JSON marshaling
+func must(data []byte, err error) json.RawMessage {
+	if err != nil {
+		panic(err)
+	}
+	return json.RawMessage(data)
 }
