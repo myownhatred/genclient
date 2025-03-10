@@ -229,7 +229,6 @@ func (w *WebSocketClient) sendTaskUpdate(conn *websocket.Conn, task *Tasukete) {
 }
 
 func (w *WebSocketClient) sendTaskResult(conn *websocket.Conn, task *Tasukete, result []byte) error {
-	// Create multipart message
 	var b bytes.Buffer
 	writer := multipart.NewWriter(&b)
 
@@ -253,8 +252,12 @@ func (w *WebSocketClient) sendTaskResult(conn *websocket.Conn, task *Tasukete, r
 
 	writer.Close()
 
-	// Send as binary websocket message
-	return conn.WriteMessage(websocket.BinaryMessage, b.Bytes())
+	// Prepend the boundary to the message
+	boundaryPrefix := []byte(fmt.Sprintf("Boundary: %s\n", writer.Boundary()))
+	msg := append(boundaryPrefix, b.Bytes()...)
+
+	// Send as binary WebSocket message
+	return conn.WriteMessage(websocket.BinaryMessage, msg)
 }
 
 // Helper function for JSON marshaling
