@@ -1,0 +1,25 @@
+server:
+  host: "45.151.107.29"
+  port: "46009"
+  passcode: "xKiller228x"
+api:
+  host: "localhost"
+  port: "7801"
+  timeout: 240
+models:
+  - name: "SD"
+    string: "OfficialStableDiffusion/sd_xl_base_1.0"
+    width: 1024  
+    height: 1024
+    steps: 4
+    cfgscale: 1.0
+    secret: "lando"
+    killwitch: 1.1
+    loras: "GyateGyate_pdxl_Incrs_v1"
+    loraweights: 2.7
+  - name: "Flux"
+    string: "Flux/flux1-schnell-fp8"
+    width: 1024  
+    height: 1024
+    steps: 4
+    cfgscale: 1

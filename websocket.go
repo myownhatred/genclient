@@ -66,8 +66,8 @@ func (w *WebSocketClient) connect() error {
 		return fmt.Errorf("authentication error: %w", err)
 	}
 
-	if err := w.requestModels(conn); err != nil {
-		return fmt.Errorf("models request error: %w", err)
+	if err := w.sendModels(conn); err != nil {
+		return fmt.Errorf("models send error: %w", err)
 	}
 
 	go w.startPingLoop(conn)
@@ -127,12 +127,23 @@ func (w *WebSocketClient) sendModels(conn *websocket.Conn) error {
 		})
 	}
 
+	var msg struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
 	modelsJSON, err := json.Marshal(models)
 	if err != nil {
 		return err
 	}
+	msg.Type = "models_update"
+	msg.Payload = modelsJSON
 
-	return conn.WriteMessage(websocket.TextMessage, modelsJSON)
+	modelsMSG, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	return conn.WriteMessage(websocket.TextMessage, modelsMSG)
 }
 
 func (w *WebSocketClient) startPingLoop(conn *websocket.Conn) {

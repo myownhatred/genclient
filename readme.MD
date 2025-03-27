@@ -18,10 +18,11 @@
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⠀⠀⠀⠀⠀⠀⢸⣧
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⣿⣆⠀⠀⠀⠀⠀⠀⢀⣀⣠⣤⣶⣾⣿⣿⣿⣿⣤⣄⣀⡀⠀⠀⠀⣿
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⢿⣻⣷⣶⣾⣿⣿⡿⢯⣛⣛⡋⠁⠀⠀⠉⠙⠛⠛⠿⣿⣿⡷⣶⣿
-Image Generation WebSocket Client
+
+# Image Generation WebSocket Client
 A robust Go application that connects to an image generation service via WebSocket, 
 processes requests, and handles image generation and distribution.
-🌟 Features
+## 🌟 Features
 
 WebSocket-based client with automatic reconnection
 Secure TLS connection support
@@ -31,15 +32,16 @@ Automatic session management
 File upload capabilities
 Pretty logging with colored output
 
-🚀 Quick Start
+## 🚀 Quick Start
 
-Clone the repository:
+### Clone the repository:
 
-bashCopygit clone https://github.com/yourusername/image-generation-client.git
+```git clone https://github.com/yourusername/image-generation-client.git```
 
-Configure your settings in config.yaml:
+### Configure your settings in config.yaml:
 
-yamlCopyserver:
+```
+server:
   host: your.server.host
   port: "8080"
   passcode: "your-passcode"
@@ -47,20 +49,23 @@ api:
   host: api.host
   port: "8081"
   timeout: 240
+```
 
-Run the application:
+### Run the application:
 
-bashCopygo run .
+```go run .```
 
-📋 Requirements
+## 📋 Requirements
 
-Go 1.21 or higher
-Working image generation API endpoint
-Valid SSL certificates (or configure to skip verification)
+- Go 1.21 or higher
+- Working image generation API endpoint
+- Valid SSL certificates (or configure to skip verification)
 
-🔧 Configuration
+## 🔧 Configuration
+
 The application uses a YAML configuration file with the following structure:
-yamlCopyserver:
+```
+server:
   host: string     # WebSocket server host
   port: string     # WebSocket server port
   passcode: string # Authentication passcode
@@ -79,16 +84,17 @@ models:
     cfgscale: float    # Configuration scale
     loras: string      # Optional LoRA settings
     loraweights: float # Optional LoRA weights
+```
 
-🔐 Security Features
+## 🔐 Security Features
 
-TLS support for secure connections
-Passcode-based authentication
-Configurable timeouts
-Secure file handling
+- TLS support for secure connections
+- Passcode-based authentication
+- Configurable timeouts
+- Secure file handling
 
-📦 Project Structure
-Copy.
+## 📦 Project Structure
+```
 ├── main.go          # Application entry point
 ├── config.go        # Configuration handling
 ├── client.go        # HTTP client implementation
@@ -96,8 +102,9 @@ Copy.
 ├── logger.go        # Custom logger
 ├── config.yaml      # Configuration file
 └── README.md        # This file
+```
 
-🐛 Debugging
+## 🐛 Debugging
 The application includes a comprehensive logging system with different levels:
 
 DEBUG: Detailed debugging information
@@ -112,16 +119,16 @@ Logs are color-coded for better visibility:
 🟡 WARN
 🔴 ERROR
 
-🤝 Contributing
+## 🤝 Contributing
 
 Please don't
 
-📜 License
+## 📜 License
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-✨ Credits
+## ✨ Credits
 ASCII cat art source: [ASCII Art Archive](https://emojicombos.com/bongo-cat-ascii-art)
 
-🔍 Known Issues
+## 🔍 Known Issues
 
 None at the moment. Please submit issues via GitHub's issue tracke
